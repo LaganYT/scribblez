@@ -5,12 +5,67 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Image Overlay Tool</title>
   <style>
-    canvas {
-      border: 1px solid #ccc;
-      cursor: grab;
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
     }
+
+    h1 {
+      margin-bottom: 20px;
+      font-size: 24px;
+      text-align: center;
+    }
+
+    input[type="file"] {
+      display: block;
+      margin-bottom: 15px;
+      padding: 10px;
+      background-color: #1e1e1e;
+      color: #ffffff;
+      border: 1px solid #333;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    canvas {
+      border: 1px solid #333;
+      background-color: #1e1e1e;
+      cursor: grab;
+      border-radius: 8px;
+    }
+
     #controls {
       margin-top: 10px;
+      display: flex;
+      justify-content: center;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: #333;
+      color: #ffffff;
+      border: 1px solid #555;
+      border-radius: 5px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background-color 0.3s, transform 0.2s;
+    }
+
+    button:hover {
+      background-color: #555;
+      transform: scale(1.05);
+    }
+
+    button:active {
+      background-color: #777;
     }
   </style>
 </head>
@@ -31,7 +86,9 @@
     let userImage = new Image();
     let overlayImage = new Image();
     let overlayPosition = { x: 200, y: 150 };
+    let overlaySize = { width: 100, height: 100 };
     let isDragging = false;
+    let isResizing = false;
 
     overlayImage.src = 'overlay.png'; // Replace with the path to your overlay image
 
@@ -51,16 +108,28 @@
     };
 
     overlayImage.onload = () => {
+      overlaySize.width = overlayImage.width / 2; // Set initial size
+      overlaySize.height = overlayImage.height / 2;
       drawCanvas();
     };
 
     canvas.addEventListener('mousedown', (event) => {
       const mousePos = getMousePos(event);
+      const cornerSize = 10;
+
       if (
+        mousePos.x > overlayPosition.x + overlaySize.width - cornerSize &&
+        mousePos.x < overlayPosition.x + overlaySize.width + cornerSize &&
+        mousePos.y > overlayPosition.y + overlaySize.height - cornerSize &&
+        mousePos.y < overlayPosition.y + overlaySize.height + cornerSize
+      ) {
+        isResizing = true;
+        canvas.style.cursor = 'nwse-resize';
+      } else if (
         mousePos.x > overlayPosition.x &&
-        mousePos.x < overlayPosition.x + overlayImage.width &&
+        mousePos.x < overlayPosition.x + overlaySize.width &&
         mousePos.y > overlayPosition.y &&
-        mousePos.y < overlayPosition.y + overlayImage.height
+        mousePos.y < overlayPosition.y + overlaySize.height
       ) {
         isDragging = true;
         canvas.style.cursor = 'grabbing';
@@ -68,16 +137,34 @@
     });
 
     canvas.addEventListener('mousemove', (event) => {
+      const mousePos = getMousePos(event);
+      const cornerSize = 10;
+
+      if (
+        mousePos.x > overlayPosition.x + overlaySize.width - cornerSize &&
+        mousePos.x < overlayPosition.x + overlaySize.width + cornerSize &&
+        mousePos.y > overlayPosition.y + overlaySize.height - cornerSize &&
+        mousePos.y < overlayPosition.y + overlaySize.height + cornerSize
+      ) {
+        canvas.style.cursor = 'nwse-resize';
+      } else {
+        canvas.style.cursor = 'grab';
+      }
+
       if (isDragging) {
-        const mousePos = getMousePos(event);
-        overlayPosition.x = mousePos.x - overlayImage.width / 2;
-        overlayPosition.y = mousePos.y - overlayImage.height / 2;
+        overlayPosition.x = mousePos.x - overlaySize.width / 2;
+        overlayPosition.y = mousePos.y - overlaySize.height / 2;
+        drawCanvas();
+      } else if (isResizing) {
+        overlaySize.width = mousePos.x - overlayPosition.x;
+        overlaySize.height = mousePos.y - overlayPosition.y;
         drawCanvas();
       }
     });
 
     canvas.addEventListener('mouseup', () => {
       isDragging = false;
+      isResizing = false;
       canvas.style.cursor = 'grab';
     });
 
@@ -108,8 +195,17 @@
           overlayImage,
           overlayPosition.x,
           overlayPosition.y,
-          overlayImage.width,
-          overlayImage.height
+          overlaySize.width,
+          overlaySize.height
+        );
+
+        // Draw resize handle
+        ctx.fillStyle = 'red';
+        ctx.fillRect(
+          overlayPosition.x + overlaySize.width - 5,
+          overlayPosition.y + overlaySize.height - 5,
+          10,
+          10
         );
       }
     }
