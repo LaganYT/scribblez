@@ -35,6 +35,16 @@
       font-size: 14px;
     }
 
+    select {
+      margin-bottom: 15px;
+      padding: 10px;
+      background-color: #1e1e1e;
+      color: #ffffff;
+      border: 1px solid #333;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
     canvas {
       border: 1px solid #333;
       background-color: #1e1e1e;
@@ -46,6 +56,7 @@
       margin-top: 10px;
       display: flex;
       justify-content: center;
+      gap: 10px;
     }
 
     button {
@@ -72,7 +83,12 @@
 <body>
   <h1>Image Overlay Tool</h1>
   <input type="file" id="upload" accept="image/*">
-  <canvas id="canvas" width="800" height="600"></canvas>
+  <select id="overlay-select">
+    <option value="overlay1.png">Overlay 1</option>
+    <option value="overlay2.png">Overlay 2</option>
+    <option value="overlay3.png">Overlay 3</option>
+  </select>
+  <canvas id="canvas" width="600" height="600"></canvas>
   <div id="controls">
     <button id="save">Save Image</button>
   </div>
@@ -82,15 +98,21 @@
     const ctx = canvas.getContext('2d');
     const upload = document.getElementById('upload');
     const saveButton = document.getElementById('save');
+    const overlaySelect = document.getElementById('overlay-select');
 
     let userImage = new Image();
     let overlayImage = new Image();
-    let overlayPosition = { x: 200, y: 150 };
+    let overlayPosition = { x: 200, y: 200 };
     let overlaySize = { width: 100, height: 100 };
     let isDragging = false;
     let isResizing = false;
+    let userImageScaled = false;
 
-    overlayImage.src = 'overlay.png'; // Replace with the path to your overlay image
+    overlayImage.src = overlaySelect.value;
+
+    overlaySelect.addEventListener('change', () => {
+      overlayImage.src = overlaySelect.value;
+    });
 
     upload.addEventListener('change', (event) => {
       const file = event.target.files[0];
@@ -104,11 +126,12 @@
     });
 
     userImage.onload = () => {
+      userImageScaled = false;
       drawCanvas();
     };
 
     overlayImage.onload = () => {
-      overlaySize.width = overlayImage.width / 2; // Set initial size
+      overlaySize.width = overlayImage.width / 2;
       overlaySize.height = overlayImage.height / 2;
       drawCanvas();
     };
@@ -169,9 +192,28 @@
     });
 
     saveButton.addEventListener('click', () => {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext('2d');
+
+      if (userImage.src) {
+        tempCtx.drawImage(userImage, 0, 0, canvas.width, canvas.height);
+      }
+
+      if (overlayImage.src) {
+        tempCtx.drawImage(
+          overlayImage,
+          overlayPosition.x,
+          overlayPosition.y,
+          overlaySize.width,
+          overlaySize.height
+        );
+      }
+
       const link = document.createElement('a');
       link.download = 'composite-image.png';
-      link.href = canvas.toDataURL('image/png');
+      link.href = tempCanvas.toDataURL('image/png');
       link.click();
     });
 
@@ -187,7 +229,25 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       if (userImage.src) {
-        ctx.drawImage(userImage, 0, 0, canvas.width, canvas.height);
+        if (!userImageScaled) {
+          const scale = Math.min(
+            canvas.width / userImage.width,
+            canvas.height / userImage.height
+          );
+          const width = userImage.width * scale;
+          const height = userImage.height * scale;
+          const xOffset = (canvas.width - width) / 2;
+          const yOffset = (canvas.height - height) / 2;
+          userImageScaled = { width, height, xOffset, yOffset };
+        }
+
+        ctx.drawImage(
+          userImage,
+          userImageScaled.xOffset,
+          userImageScaled.yOffset,
+          userImageScaled.width,
+          userImageScaled.height
+        );
       }
 
       if (overlayImage.src) {
@@ -199,7 +259,7 @@
           overlaySize.height
         );
 
-        // Draw resize handle
+        // Draw resize handle (not saved)
         ctx.fillStyle = 'red';
         ctx.fillRect(
           overlayPosition.x + overlaySize.width - 5,
