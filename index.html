@@ -90,6 +90,7 @@
   </select>
   <canvas id="canvas" width="600" height="600"></canvas>
   <div id="controls">
+    <button id="crop">Crop Image</button>
     <button id="save">Save Image</button>
   </div>
 
@@ -98,15 +99,18 @@
     const ctx = canvas.getContext('2d');
     const upload = document.getElementById('upload');
     const saveButton = document.getElementById('save');
+    const cropButton = document.getElementById('crop');
     const overlaySelect = document.getElementById('overlay-select');
 
     let userImage = new Image();
     let overlayImage = new Image();
     let overlayPosition = { x: 200, y: 200 };
     let overlaySize = { width: 100, height: 100 };
+    let userImageScaled = false;
     let isDragging = false;
     let isResizing = false;
-    let userImageScaled = false;
+    let croppingRect = null;
+    let isCropping = false;
 
     overlayImage.src = overlaySelect.value;
 
@@ -127,6 +131,7 @@
 
     userImage.onload = () => {
       userImageScaled = false;
+      croppingRect = null;
       drawCanvas();
     };
 
@@ -138,29 +143,42 @@
 
     canvas.addEventListener('mousedown', (event) => {
       const mousePos = getMousePos(event);
-      const cornerSize = 10;
 
-      if (
-        mousePos.x > overlayPosition.x + overlaySize.width - cornerSize &&
-        mousePos.x < overlayPosition.x + overlaySize.width + cornerSize &&
-        mousePos.y > overlayPosition.y + overlaySize.height - cornerSize &&
-        mousePos.y < overlayPosition.y + overlaySize.height + cornerSize
-      ) {
-        isResizing = true;
-        canvas.style.cursor = 'nwse-resize';
-      } else if (
-        mousePos.x > overlayPosition.x &&
-        mousePos.x < overlayPosition.x + overlaySize.width &&
-        mousePos.y > overlayPosition.y &&
-        mousePos.y < overlayPosition.y + overlaySize.height
-      ) {
-        isDragging = true;
-        canvas.style.cursor = 'grabbing';
+      if (isCropping) {
+        croppingRect = { x: mousePos.x, y: mousePos.y, width: 0, height: 0 };
+      } else {
+        const cornerSize = 10;
+
+        if (
+          mousePos.x > overlayPosition.x + overlaySize.width - cornerSize &&
+          mousePos.x < overlayPosition.x + overlaySize.width + cornerSize &&
+          mousePos.y > overlayPosition.y + overlaySize.height - cornerSize &&
+          mousePos.y < overlayPosition.y + overlaySize.height + cornerSize
+        ) {
+          isResizing = true;
+          canvas.style.cursor = 'nwse-resize';
+        } else if (
+          mousePos.x > overlayPosition.x &&
+          mousePos.x < overlayPosition.x + overlaySize.width &&
+          mousePos.y > overlayPosition.y &&
+          mousePos.y < overlayPosition.y + overlaySize.height
+        ) {
+          isDragging = true;
+          canvas.style.cursor = 'grabbing';
+        }
       }
     });
 
     canvas.addEventListener('mousemove', (event) => {
       const mousePos = getMousePos(event);
+
+      if (isCropping && croppingRect) {
+        croppingRect.width = mousePos.x - croppingRect.x;
+        croppingRect.height = mousePos.y - croppingRect.y;
+        drawCanvas();
+        return;
+      }
+
       const cornerSize = 10;
 
       if (
@@ -189,6 +207,44 @@
       isDragging = false;
       isResizing = false;
       canvas.style.cursor = 'grab';
+      isCropping = false;
+    });
+
+    cropButton.addEventListener('click', () => {
+      isCropping = true;
+      croppingRect = null;
+    });
+
+    canvas.addEventListener('dblclick', () => {
+      if (croppingRect) {
+        const scaleX = userImage.width / canvas.width;
+        const scaleY = userImage.height / canvas.height;
+
+        const croppedX = croppingRect.x * scaleX;
+        const croppedY = croppingRect.y * scaleY;
+        const croppedWidth = croppingRect.width * scaleX;
+        const croppedHeight = croppingRect.height * scaleY;
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = 600;
+        tempCanvas.height = 600;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        tempCtx.drawImage(
+          userImage,
+          croppedX,
+          croppedY,
+          croppedWidth,
+          croppedHeight,
+          0,
+          0,
+          tempCanvas.width,
+          tempCanvas.height
+        );
+
+        userImage.src = tempCanvas.toDataURL();
+        croppingRect = null;
+      }
     });
 
     saveButton.addEventListener('click', () => {
@@ -229,24 +285,17 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       if (userImage.src) {
-        if (!userImageScaled) {
-          const scale = Math.min(
-            canvas.width / userImage.width,
-            canvas.height / userImage.height
-          );
-          const width = userImage.width * scale;
-          const height = userImage.height * scale;
-          const xOffset = (canvas.width - width) / 2;
-          const yOffset = (canvas.height - height) / 2;
-          userImageScaled = { width, height, xOffset, yOffset };
-        }
+        ctx.drawImage(userImage, 0, 0, canvas.width, canvas.height);
+      }
 
-        ctx.drawImage(
-          userImage,
-          userImageScaled.xOffset,
-          userImageScaled.yOffset,
-          userImageScaled.width,
-          userImageScaled.height
+      if (croppingRect) {
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          croppingRect.x,
+          croppingRect.y,
+          croppingRect.width,
+          croppingRect.height
         );
       }
 
