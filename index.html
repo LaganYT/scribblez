@@ -50,6 +50,9 @@
       background-color: #1e1e1e;
       cursor: move;
       border-radius: 8px;
+      max-width: 90%;
+      max-height: 500px;
+      object-fit: contain;
     }
 
     #controls {
@@ -88,7 +91,7 @@
     <option value="overlay2.png">Overlay 2</option>
     <option value="overlay3.png">Overlay 3</option>
   </select>
-  <canvas id="canvas" width="600" height="400"></canvas>
+  <canvas id="canvas"></canvas>
   <div id="controls">
     <button id="save">Save Image</button>
   </div>
@@ -102,11 +105,12 @@
 
     let userImage = new Image();
     let overlayImage = new Image();
-    let overlayPosition = { x: 200, y: 150 };
+    let overlayPosition = { x: 50, y: 50 };
     let overlaySize = { width: 100, height: 100 };
     let isDraggingOverlay = false;
     let isResizingOverlay = false;
     let startX, startY;
+    let originalImageRatio = 1;
 
     overlayImage.src = overlaySelect.value;
 
@@ -127,8 +131,9 @@
     });
 
     userImage.onload = () => {
-      canvas.width = userImage.width;
-      canvas.height = userImage.height;
+      originalImageRatio = userImage.width / userImage.height;
+      canvas.width = 600;
+      canvas.height = canvas.width / originalImageRatio;
       drawCanvas();
     };
 
@@ -178,9 +183,24 @@
     });
 
     saveButton.addEventListener('click', () => {
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+
+      tempCtx.drawImage(userImage, 0, 0, canvas.width, canvas.height);
+      tempCtx.drawImage(
+        overlayImage,
+        overlayPosition.x,
+        overlayPosition.y,
+        overlaySize.width,
+        overlaySize.height
+      );
+
       const link = document.createElement('a');
       link.download = 'image-with-overlay.png';
-      link.href = canvas.toDataURL('image/png');
+      link.href = tempCanvas.toDataURL('image/png');
       link.click();
     });
 
@@ -223,7 +243,7 @@
         overlaySize.height
       );
 
-      // Draw corner for resizing
+      // Draw corner for resizing (not included in saved image)
       ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
       ctx.fillRect(
         overlayPosition.x + overlaySize.width - 5,
