@@ -108,7 +108,10 @@
     let overlaySize = { width: 100, height: 100 };
     let userImagePosition = { x: 0, y: 0 };
     let userImageScale = 1;
-    let isDraggingImage = false;
+    let userImageDragging = false;
+    let overlayDragging = false;
+    let resizingOverlay = false;
+    let resizingUserImage = false;
     let lastMousePos = { x: 0, y: 0 };
 
     overlayImage.src = overlaySelect.value;
@@ -129,7 +132,7 @@
     });
 
     userImage.onload = () => {
-      userImagePosition = { x: 0, y: 0 };
+      userImagePosition = { x: (canvas.width - userImage.width * userImageScale) / 2, y: (canvas.height - userImage.height * userImageScale) / 2 };
       userImageScale = Math.min(
         canvas.width / userImage.width,
         canvas.height / userImage.height
@@ -151,32 +154,79 @@
 
     canvas.addEventListener('mousedown', (event) => {
       const mousePos = getMousePos(event);
+
       if (
+        mousePos.x > overlayPosition.x &&
+        mousePos.x < overlayPosition.x + overlaySize.width &&
+        mousePos.y > overlayPosition.y &&
+        mousePos.y < overlayPosition.y + overlaySize.height
+      ) {
+        overlayDragging = true;
+        lastMousePos = mousePos;
+        canvas.style.cursor = 'grabbing';
+      } else if (
+        mousePos.x > overlayPosition.x + overlaySize.width - 10 &&
+        mousePos.y > overlayPosition.y + overlaySize.height - 10
+      ) {
+        resizingOverlay = true;
+        lastMousePos = mousePos;
+        canvas.style.cursor = 'nwse-resize';
+      } else if (
         mousePos.x > userImagePosition.x &&
         mousePos.x < userImagePosition.x + userImage.width * userImageScale &&
         mousePos.y > userImagePosition.y &&
         mousePos.y < userImagePosition.y + userImage.height * userImageScale
       ) {
-        isDraggingImage = true;
+        userImageDragging = true;
         lastMousePos = mousePos;
         canvas.style.cursor = 'grabbing';
+      } else if (
+        mousePos.x > userImagePosition.x + userImage.width * userImageScale - 10 &&
+        mousePos.y > userImagePosition.y + userImage.height * userImageScale - 10
+      ) {
+        resizingUserImage = true;
+        lastMousePos = mousePos;
+        canvas.style.cursor = 'nwse-resize';
       }
     });
 
     canvas.addEventListener('mousemove', (event) => {
-      if (isDraggingImage) {
-        const mousePos = getMousePos(event);
+      const mousePos = getMousePos(event);
+
+      if (overlayDragging) {
+        const dx = mousePos.x - lastMousePos.x;
+        const dy = mousePos.y - lastMousePos.y;
+        overlayPosition.x += dx;
+        overlayPosition.y += dy;
+        lastMousePos = mousePos;
+        drawCanvas();
+      } else if (resizingOverlay) {
+        const dx = mousePos.x - lastMousePos.x;
+        const dy = mousePos.y - lastMousePos.y;
+        overlaySize.width += dx;
+        overlaySize.height += dy;
+        lastMousePos = mousePos;
+        drawCanvas();
+      } else if (userImageDragging) {
         const dx = mousePos.x - lastMousePos.x;
         const dy = mousePos.y - lastMousePos.y;
         userImagePosition.x += dx;
         userImagePosition.y += dy;
         lastMousePos = mousePos;
         drawCanvas();
+      } else if (resizingUserImage) {
+        const dx = mousePos.x - lastMousePos.x;
+        userImageScale += dx / 100;
+        lastMousePos = mousePos;
+        drawCanvas();
       }
     });
 
     canvas.addEventListener('mouseup', () => {
-      isDraggingImage = false;
+      overlayDragging = false;
+      resizingOverlay = false;
+      userImageDragging = false;
+      resizingUserImage = false;
       canvas.style.cursor = 'grab';
     });
 
