@@ -106,11 +106,9 @@
     let overlayImage = new Image();
     let overlayPosition = { x: 200, y: 200 };
     let overlaySize = { width: 100, height: 100 };
-    let userImageScaled = false;
-    let isDragging = false;
-    let isResizing = false;
-    let croppingRect = null;
-    let isCropping = false;
+    let userImagePosition = { x: 0, y: 0 };
+    let userImageDragging = false;
+    let isCroppingMode = false;
 
     overlayImage.src = overlaySelect.value;
 
@@ -130,8 +128,8 @@
     });
 
     userImage.onload = () => {
-      userImageScaled = false;
-      croppingRect = null;
+      userImagePosition = { x: 0, y: 0 };
+      isCroppingMode = false;
       drawCanvas();
     };
 
@@ -141,29 +139,22 @@
       drawCanvas();
     };
 
+    cropButton.addEventListener('click', () => {
+      isCroppingMode = true;
+      drawCanvas();
+    });
+
     canvas.addEventListener('mousedown', (event) => {
       const mousePos = getMousePos(event);
 
-      if (isCropping) {
-        croppingRect = { x: mousePos.x, y: mousePos.y, width: 0, height: 0 };
-      } else {
-        const cornerSize = 10;
-
+      if (isCroppingMode) {
         if (
-          mousePos.x > overlayPosition.x + overlaySize.width - cornerSize &&
-          mousePos.x < overlayPosition.x + overlaySize.width + cornerSize &&
-          mousePos.y > overlayPosition.y + overlaySize.height - cornerSize &&
-          mousePos.y < overlayPosition.y + overlaySize.height + cornerSize
+          mousePos.x > userImagePosition.x &&
+          mousePos.x < userImagePosition.x + canvas.width &&
+          mousePos.y > userImagePosition.y &&
+          mousePos.y < userImagePosition.y + canvas.height
         ) {
-          isResizing = true;
-          canvas.style.cursor = 'nwse-resize';
-        } else if (
-          mousePos.x > overlayPosition.x &&
-          mousePos.x < overlayPosition.x + overlaySize.width &&
-          mousePos.y > overlayPosition.y &&
-          mousePos.y < overlayPosition.y + overlaySize.height
-        ) {
-          isDragging = true;
+          userImageDragging = true;
           canvas.style.cursor = 'grabbing';
         }
       }
@@ -172,79 +163,16 @@
     canvas.addEventListener('mousemove', (event) => {
       const mousePos = getMousePos(event);
 
-      if (isCropping && croppingRect) {
-        croppingRect.width = mousePos.x - croppingRect.x;
-        croppingRect.height = mousePos.y - croppingRect.y;
-        drawCanvas();
-        return;
-      }
-
-      const cornerSize = 10;
-
-      if (
-        mousePos.x > overlayPosition.x + overlaySize.width - cornerSize &&
-        mousePos.x < overlayPosition.x + overlaySize.width + cornerSize &&
-        mousePos.y > overlayPosition.y + overlaySize.height - cornerSize &&
-        mousePos.y < overlayPosition.y + overlaySize.height + cornerSize
-      ) {
-        canvas.style.cursor = 'nwse-resize';
-      } else {
-        canvas.style.cursor = 'grab';
-      }
-
-      if (isDragging) {
-        overlayPosition.x = mousePos.x - overlaySize.width / 2;
-        overlayPosition.y = mousePos.y - overlaySize.height / 2;
-        drawCanvas();
-      } else if (isResizing) {
-        overlaySize.width = mousePos.x - overlayPosition.x;
-        overlaySize.height = mousePos.y - overlayPosition.y;
+      if (isCroppingMode && userImageDragging) {
+        userImagePosition.x += event.movementX;
+        userImagePosition.y += event.movementY;
         drawCanvas();
       }
     });
 
     canvas.addEventListener('mouseup', () => {
-      isDragging = false;
-      isResizing = false;
+      userImageDragging = false;
       canvas.style.cursor = 'grab';
-      isCropping = false;
-    });
-
-    cropButton.addEventListener('click', () => {
-      isCropping = true;
-      croppingRect = null;
-    });
-
-    canvas.addEventListener('dblclick', () => {
-      if (croppingRect) {
-        const scaleX = userImage.width / canvas.width;
-        const scaleY = userImage.height / canvas.height;
-
-        const croppedX = croppingRect.x * scaleX;
-        const croppedY = croppingRect.y * scaleY;
-        const croppedWidth = croppingRect.width * scaleX;
-        const croppedHeight = croppingRect.height * scaleY;
-
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = 600;
-        tempCanvas.height = 600;
-        const tempCtx = tempCanvas.getContext('2d');
-
-        tempCtx.drawImage(
-          userImage,
-          croppedX,
-          croppedY,
-          croppedWidth,
-          croppedHeight,
-          0,
-          0,
-          tempCanvas.width,
-          tempCanvas.height
-        );
-
-        userImage.src = tempCanvas.toDataURL();
-        croppingRect = null;
-      }
     });
 
     saveButton.addEventListener('click', () => {
@@ -254,7 +182,13 @@
       const tempCtx = tempCanvas.getContext('2d');
 
       if (userImage.src) {
-        tempCtx.drawImage(userImage, 0, 0, canvas.width, canvas.height);
+        tempCtx.drawImage(
+          userImage,
+          userImagePosition.x,
+          userImagePosition.y,
+          canvas.width,
+          canvas.height
+        );
       }
 
       if (overlayImage.src) {
@@ -284,19 +218,16 @@
     function drawCanvas() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (userImage.src) {
-        ctx.drawImage(userImage, 0, 0, canvas.width, canvas.height);
-      }
-
-      if (croppingRect) {
-        ctx.strokeStyle = 'red';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(
-          croppingRect.x,
-          croppingRect.y,
-          croppingRect.width,
-          croppingRect.height
+      if (userImage.src && isCroppingMode) {
+        ctx.drawImage(
+          userImage,
+          userImagePosition.x,
+          userImagePosition.y,
+          canvas.width,
+          canvas.height
         );
+      } else if (userImage.src) {
+        ctx.drawImage(userImage, 0, 0, canvas.width, canvas.height);
       }
 
       if (overlayImage.src) {
