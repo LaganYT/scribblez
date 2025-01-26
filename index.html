@@ -48,7 +48,7 @@
     canvas {
       border: 1px solid #333;
       background-color: #1e1e1e;
-      cursor: grab;
+      cursor: crosshair;
       border-radius: 8px;
     }
 
@@ -90,7 +90,8 @@
   </select>
   <canvas id="canvas" width="600" height="600"></canvas>
   <div id="controls">
-    <button id="crop">Set Aspect Ratio</button>
+    <button id="enable-crop">Enable Cropping</button>
+    <button id="apply-crop">Apply Crop</button>
     <button id="save">Save Image</button>
   </div>
 
@@ -99,20 +100,19 @@
     const ctx = canvas.getContext('2d');
     const upload = document.getElementById('upload');
     const saveButton = document.getElementById('save');
-    const cropButton = document.getElementById('crop');
+    const cropButton = document.getElementById('enable-crop');
+    const applyCropButton = document.getElementById('apply-crop');
     const overlaySelect = document.getElementById('overlay-select');
 
     let userImage = new Image();
     let overlayImage = new Image();
     let overlayPosition = { x: 200, y: 200 };
     let overlaySize = { width: 100, height: 100 };
-    let userImagePosition = { x: 0, y: 0 };
-    let userImageScale = 1;
-    let userImageDragging = false;
-    let overlayDragging = false;
-    let resizingOverlay = false;
-    let resizingUserImage = false;
-    let lastMousePos = { x: 0, y: 0 };
+    let cropping = false;
+    let cropStart = null;
+    let cropEnd = null;
+
+    let cropBox = { x: 0, y: 0, width: canvas.width, height: canvas.height };
 
     overlayImage.src = overlaySelect.value;
 
@@ -132,11 +132,12 @@
     });
 
     userImage.onload = () => {
-      userImagePosition = { x: (canvas.width - userImage.width * userImageScale) / 2, y: (canvas.height - userImage.height * userImageScale) / 2 };
-      userImageScale = Math.min(
-        canvas.width / userImage.width,
-        canvas.height / userImage.height
-      );
+      cropBox = {
+        x: 0,
+        y: 0,
+        width: userImage.width,
+        height: userImage.height,
+      };
       drawCanvas();
     };
 
@@ -147,117 +148,88 @@
     };
 
     cropButton.addEventListener('click', () => {
-      userImagePosition.x = (canvas.width - userImage.width * userImageScale) / 2;
-      userImagePosition.y = (canvas.height - userImage.height * userImageScale) / 2;
-      drawCanvas();
+      cropping = true;
+      canvas.style.cursor = 'crosshair';
+    });
+
+    applyCropButton.addEventListener('click', () => {
+      if (cropStart && cropEnd) {
+        cropBox.x = Math.min(cropStart.x, cropEnd.x);
+        cropBox.y = Math.min(cropStart.y, cropEnd.y);
+        cropBox.width = Math.abs(cropEnd.x - cropStart.x);
+        cropBox.height = Math.abs(cropEnd.y - cropStart.y);
+        cropStart = null;
+        cropEnd = null;
+        cropping = false;
+        canvas.style.cursor = 'default';
+        drawCanvas();
+      }
     });
 
     canvas.addEventListener('mousedown', (event) => {
-      const mousePos = getMousePos(event);
-
-      if (
-        mousePos.x > overlayPosition.x &&
-        mousePos.x < overlayPosition.x + overlaySize.width &&
-        mousePos.y > overlayPosition.y &&
-        mousePos.y < overlayPosition.y + overlaySize.height
-      ) {
-        overlayDragging = true;
-        lastMousePos = mousePos;
-        canvas.style.cursor = 'grabbing';
-      } else if (
-        mousePos.x > overlayPosition.x + overlaySize.width - 10 &&
-        mousePos.y > overlayPosition.y + overlaySize.height - 10
-      ) {
-        resizingOverlay = true;
-        lastMousePos = mousePos;
-        canvas.style.cursor = 'nwse-resize';
-      } else if (
-        mousePos.x > userImagePosition.x &&
-        mousePos.x < userImagePosition.x + userImage.width * userImageScale &&
-        mousePos.y > userImagePosition.y &&
-        mousePos.y < userImagePosition.y + userImage.height * userImageScale
-      ) {
-        userImageDragging = true;
-        lastMousePos = mousePos;
-        canvas.style.cursor = 'grabbing';
-      } else if (
-        mousePos.x > userImagePosition.x + userImage.width * userImageScale - 10 &&
-        mousePos.y > userImagePosition.y + userImage.height * userImageScale - 10
-      ) {
-        resizingUserImage = true;
-        lastMousePos = mousePos;
-        canvas.style.cursor = 'nwse-resize';
+      if (cropping) {
+        const mousePos = getMousePos(event);
+        cropStart = mousePos;
       }
     });
 
     canvas.addEventListener('mousemove', (event) => {
-      const mousePos = getMousePos(event);
+      if (cropping && cropStart) {
+        const mousePos = getMousePos(event);
+        cropEnd = mousePos;
+        drawCanvas();
 
-      if (overlayDragging) {
-        const dx = mousePos.x - lastMousePos.x;
-        const dy = mousePos.y - lastMousePos.y;
-        overlayPosition.x += dx;
-        overlayPosition.y += dy;
-        lastMousePos = mousePos;
-        drawCanvas();
-      } else if (resizingOverlay) {
-        const dx = mousePos.x - lastMousePos.x;
-        const dy = mousePos.y - lastMousePos.y;
-        overlaySize.width += dx;
-        overlaySize.height += dy;
-        lastMousePos = mousePos;
-        drawCanvas();
-      } else if (userImageDragging) {
-        const dx = mousePos.x - lastMousePos.x;
-        const dy = mousePos.y - lastMousePos.y;
-        userImagePosition.x += dx;
-        userImagePosition.y += dy;
-        lastMousePos = mousePos;
-        drawCanvas();
-      } else if (resizingUserImage) {
-        const dx = mousePos.x - lastMousePos.x;
-        userImageScale += dx / 100;
-        lastMousePos = mousePos;
-        drawCanvas();
+        // Draw the cropping rectangle
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6]);
+        ctx.strokeRect(
+          Math.min(cropStart.x, cropEnd.x),
+          Math.min(cropStart.y, cropEnd.y),
+          Math.abs(cropEnd.x - cropStart.x),
+          Math.abs(cropEnd.y - cropStart.y)
+        );
+        ctx.setLineDash([]);
       }
     });
 
     canvas.addEventListener('mouseup', () => {
-      overlayDragging = false;
-      resizingOverlay = false;
-      userImageDragging = false;
-      resizingUserImage = false;
-      canvas.style.cursor = 'grab';
+      if (cropping) {
+        cropping = false;
+        canvas.style.cursor = 'default';
+      }
     });
 
     saveButton.addEventListener('click', () => {
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = canvas.width;
-      tempCanvas.height = canvas.height;
+      tempCanvas.width = cropBox.width;
+      tempCanvas.height = cropBox.height;
       const tempCtx = tempCanvas.getContext('2d');
 
-      if (userImage.src) {
-        tempCtx.drawImage(
-          userImage,
-          userImagePosition.x,
-          userImagePosition.y,
-          userImage.width * userImageScale,
-          userImage.height * userImageScale
-        );
-      }
+      tempCtx.drawImage(
+        userImage,
+        cropBox.x,
+        cropBox.y,
+        cropBox.width,
+        cropBox.height,
+        0,
+        0,
+        tempCanvas.width,
+        tempCanvas.height
+      );
 
       if (overlayImage.src) {
         tempCtx.drawImage(
           overlayImage,
-          overlayPosition.x,
-          overlayPosition.y,
+          overlayPosition.x - cropBox.x,
+          overlayPosition.y - cropBox.y,
           overlaySize.width,
           overlaySize.height
         );
       }
 
       const link = document.createElement('a');
-      link.download = 'composite-image.png';
+      link.download = 'cropped-image.png';
       link.href = tempCanvas.toDataURL('image/png');
       link.click();
     });
@@ -272,21 +244,17 @@
 
     function drawCanvas() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      if (userImage.src) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, canvas.width, canvas.height);
-        ctx.clip();
-        ctx.drawImage(
-          userImage,
-          userImagePosition.x,
-          userImagePosition.y,
-          userImage.width * userImageScale,
-          userImage.height * userImageScale
-        );
-        ctx.restore();
-      }
+      ctx.drawImage(
+        userImage,
+        cropBox.x,
+        cropBox.y,
+        cropBox.width,
+        cropBox.height,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
 
       if (overlayImage.src) {
         ctx.drawImage(
@@ -295,15 +263,6 @@
           overlayPosition.y,
           overlaySize.width,
           overlaySize.height
-        );
-
-        // Draw resize handle (not saved)
-        ctx.fillStyle = 'red';
-        ctx.fillRect(
-          overlayPosition.x + overlaySize.width - 5,
-          overlayPosition.y + overlaySize.height - 5,
-          10,
-          10
         );
       }
     }
