@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Image Overlay Tool</title>
+  <title>Image Crop & Overlay Tool</title>
   <style>
     body {
       background-color: #121212;
@@ -48,7 +48,7 @@
     canvas {
       border: 1px solid #333;
       background-color: #1e1e1e;
-      cursor: crosshair;
+      cursor: move;
       border-radius: 8px;
     }
 
@@ -81,7 +81,7 @@
   </style>
 </head>
 <body>
-  <h1>Image Overlay Tool</h1>
+  <h1>Image Crop & Overlay Tool</h1>
   <input type="file" id="upload" accept="image/*">
   <select id="overlay-select">
     <option value="overlay1.png">Overlay 1</option>
@@ -90,8 +90,7 @@
   </select>
   <canvas id="canvas" width="600" height="600"></canvas>
   <div id="controls">
-    <button id="enable-crop">Enable Cropping</button>
-    <button id="apply-crop">Apply Crop</button>
+    <button id="reset">Reset Crop</button>
     <button id="save">Save Image</button>
   </div>
 
@@ -100,24 +99,24 @@
     const ctx = canvas.getContext('2d');
     const upload = document.getElementById('upload');
     const saveButton = document.getElementById('save');
-    const cropButton = document.getElementById('enable-crop');
-    const applyCropButton = document.getElementById('apply-crop');
+    const resetButton = document.getElementById('reset');
     const overlaySelect = document.getElementById('overlay-select');
 
     let userImage = new Image();
     let overlayImage = new Image();
+    let cropBox = { x: 150, y: 150, width: 300, height: 300 };
+    let isDraggingCrop = false;
+    let isResizingCrop = false;
+    let startX, startY;
     let overlayPosition = { x: 200, y: 200 };
     let overlaySize = { width: 100, height: 100 };
-    let cropping = false;
-    let cropStart = null;
-    let cropEnd = null;
-
-    let cropBox = { x: 0, y: 0, width: canvas.width, height: canvas.height };
+    let dragOverlay = false;
 
     overlayImage.src = overlaySelect.value;
 
     overlaySelect.addEventListener('change', () => {
       overlayImage.src = overlaySelect.value;
+      drawCanvas();
     });
 
     upload.addEventListener('change', (event) => {
@@ -132,72 +131,59 @@
     });
 
     userImage.onload = () => {
-      cropBox = {
-        x: 0,
-        y: 0,
-        width: userImage.width,
-        height: userImage.height,
-      };
       drawCanvas();
     };
 
     overlayImage.onload = () => {
-      overlaySize.width = overlayImage.width / 2;
-      overlaySize.height = overlayImage.height / 2;
       drawCanvas();
     };
 
-    cropButton.addEventListener('click', () => {
-      cropping = true;
-      canvas.style.cursor = 'crosshair';
-    });
-
-    applyCropButton.addEventListener('click', () => {
-      if (cropStart && cropEnd) {
-        cropBox.x = Math.min(cropStart.x, cropEnd.x);
-        cropBox.y = Math.min(cropStart.y, cropEnd.y);
-        cropBox.width = Math.abs(cropEnd.x - cropStart.x);
-        cropBox.height = Math.abs(cropEnd.y - cropStart.y);
-        cropStart = null;
-        cropEnd = null;
-        cropping = false;
-        canvas.style.cursor = 'default';
-        drawCanvas();
-      }
-    });
-
     canvas.addEventListener('mousedown', (event) => {
-      if (cropping) {
-        const mousePos = getMousePos(event);
-        cropStart = mousePos;
+      const mousePos = getMousePos(event);
+
+      if (isInsideCropBox(mousePos)) {
+        isDraggingCrop = true;
+        startX = mousePos.x;
+        startY = mousePos.y;
+      } else if (isInsideOverlay(mousePos)) {
+        dragOverlay = true;
+        startX = mousePos.x;
+        startY = mousePos.y;
       }
     });
 
     canvas.addEventListener('mousemove', (event) => {
-      if (cropping && cropStart) {
-        const mousePos = getMousePos(event);
-        cropEnd = mousePos;
-        drawCanvas();
+      const mousePos = getMousePos(event);
 
-        // Draw the cropping rectangle
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6]);
-        ctx.strokeRect(
-          Math.min(cropStart.x, cropEnd.x),
-          Math.min(cropStart.y, cropEnd.y),
-          Math.abs(cropEnd.x - cropStart.x),
-          Math.abs(cropEnd.y - cropStart.y)
-        );
-        ctx.setLineDash([]);
+      if (isDraggingCrop) {
+        const dx = mousePos.x - startX;
+        const dy = mousePos.y - startY;
+        cropBox.x += dx;
+        cropBox.y += dy;
+        startX = mousePos.x;
+        startY = mousePos.y;
+        drawCanvas();
+      } else if (dragOverlay) {
+        const dx = mousePos.x - startX;
+        const dy = mousePos.y - startY;
+        overlayPosition.x += dx;
+        overlayPosition.y += dy;
+        startX = mousePos.x;
+        startY = mousePos.y;
+        drawCanvas();
       }
     });
 
     canvas.addEventListener('mouseup', () => {
-      if (cropping) {
-        cropping = false;
-        canvas.style.cursor = 'default';
-      }
+      isDraggingCrop = false;
+      dragOverlay = false;
+    });
+
+    resetButton.addEventListener('click', () => {
+      cropBox = { x: 150, y: 150, width: 300, height: 300 };
+      overlayPosition = { x: 200, y: 200 };
+      overlaySize = { width: 100, height: 100 };
+      drawCanvas();
     });
 
     saveButton.addEventListener('click', () => {
@@ -242,29 +228,39 @@
       };
     }
 
+    function isInsideCropBox(pos) {
+      return (
+        pos.x >= cropBox.x &&
+        pos.x <= cropBox.x + cropBox.width &&
+        pos.y >= cropBox.y &&
+        pos.y <= cropBox.y + cropBox.height
+      );
+    }
+
+    function isInsideOverlay(pos) {
+      return (
+        pos.x >= overlayPosition.x &&
+        pos.x <= overlayPosition.x + overlaySize.width &&
+        pos.y >= overlayPosition.y &&
+        pos.y <= overlayPosition.y + overlaySize.height
+      );
+    }
+
     function drawCanvas() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(
-        userImage,
-        cropBox.x,
-        cropBox.y,
-        cropBox.width,
-        cropBox.height,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
+      ctx.drawImage(userImage, 0, 0, canvas.width, canvas.height);
 
-      if (overlayImage.src) {
-        ctx.drawImage(
-          overlayImage,
-          overlayPosition.x,
-          overlayPosition.y,
-          overlaySize.width,
-          overlaySize.height
-        );
-      }
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cropBox.x, cropBox.y, cropBox.width, cropBox.height);
+
+      ctx.drawImage(
+        overlayImage,
+        overlayPosition.x,
+        overlayPosition.y,
+        overlaySize.width,
+        overlaySize.height
+      );
     }
   </script>
 </body>
